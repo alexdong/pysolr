@@ -17,7 +17,6 @@ class MultiPartForm(object):
         self.form_fields = []
         self.files = []
         self.boundary = mimetools.choose_boundary()
-        return
 
     def get_content_type(self):
         return 'multipart/form-data; boundary=%s' % self.boundary
@@ -25,15 +24,12 @@ class MultiPartForm(object):
     def add_field(self, name, value):
         """Add a simple field to the form data."""
         self.form_fields.append((name, value))
-        return
 
-    def add_file(self, fieldname, filename, fileHandle, mimetype=None):
+    def add_file(self, fieldname, filename, content, mimetype=None):
         """Add a file to be uploaded."""
-        body = fileHandle.read()
         if mimetype is None:
             mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-        self.files.append((fieldname, filename, mimetype, body))
-        return
+        self.files.append((fieldname, filename, mimetype, content))
 
     def __str__(self):
         """Return a string representing the form data, including attached files."""

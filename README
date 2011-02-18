@@ -14,6 +14,7 @@ Features
 * "More Like This" support (if setup in Solr).
 * Spelling correction (if setup in Solr).
 * Timeout support.
+* Index binary documents using Tika (if setup in Solr).
 
 
 Requirements
@@ -31,6 +32,11 @@ Installation
 
 ``sudo python setup.py install`` or drop the ``pysolr.py`` file anywhere on your
 PYTHONPATH.
+
+
+Documentation
+=============
+A pretty comprehensive doctest has been provided in ``pysolr.py`` file. It should work without any changes to the default Solr 1.4 package. 
 
 
 LICENSE

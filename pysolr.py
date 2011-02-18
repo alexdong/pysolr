@@ -12,10 +12,10 @@ For now, we can only index python dictionaries. Each key in the dictionary
 will correspond to a field in Solr.
 
 >>> docs = [
-...     {'id': 'testdoc.1', 'order_i': 1, 'name': 'document 1', 'text': u'Paul Verlaine'},
-...     {'id': 'testdoc.2', 'order_i': 2, 'name': 'document 2', 'text': u'Владимир Маякoвский'},
-...     {'id': 'testdoc.3', 'order_i': 3, 'name': 'document 3', 'text': u'test'},
-...     {'id': 'testdoc.4', 'order_i': 4, 'name': 'document 4', 'text': u'test'}
+...     {'id': 'testdoc.1', 'popularity': 2, 'text': u'Paul Verlaine'},
+...     {'id': 'testdoc.2', 'popularity': 1, 'text': u'Владимир Маякoвский'},
+...     {'id': 'testdoc.3', 'popularity': 3, 'text': u'test'},
+...     {'id': 'testdoc.4', 'popularity': 1, 'text': u'test'}
 ... ]
 
 
@@ -23,17 +23,6 @@ We can add documents to the index by passing a list of docs to the connection's
 add method.
 
 >>> conn.add(docs)
-
-We can also add binary documents, like pdf, to the index by passing the file
-handle and content_type to the conection's add_file method.
->>> import urllib2
->>> conn.add_file({'id': 'testdoc.5', 'order_i': 5, 'name': 'document 5'},
-        urllib2.urlopen('http://labs.google.com/papers/bigtable-osdi06.pdf'),
-        filename='bigtable paper from google',
-        content_type='application/pdf')
->>> results = conn.search('bigtable')
->>> len(results)
-1
 
 >>> results = conn.search('Verlaine')
 >>> len(results)
@@ -44,26 +33,28 @@ handle and content_type to the conection's add_file method.
 1
 
 
+
 Simple tests for searching. We can optionally sort the results using Solr's
 sort syntax, that is, the field name and either asc or desc.
 
->>> results = conn.search('test', sort='order_i asc')
+>>> results = conn.search('test', sort='popularity asc')
 >>> for result in results:
-...     print result['name']
-document 3
-document 4
+...     print result['id']
+testdoc.4
+testdoc.3
 
->>> results = conn.search('test', sort='order_i desc')
+>>> results = conn.search('test', sort='popularity desc')
 >>> for result in results:
-...     print result['name']
-document 4
-document 3
+...     print result['id']
+testdoc.3
+testdoc.4
+
 
 
 To update documents, we just use the add method.
 
 >>> docs = [
-...     {'id': 'testdoc.4', 'order_i': 4, 'name': 'document 4', 'text': u'blah'}
+...     {'id': 'testdoc.4', 'text': u'blah'}
 ... ]
 >>> conn.add(docs)
 
@@ -75,58 +66,59 @@ To update documents, we just use the add method.
 
 We can delete documents from the index by id, or by supplying a query.
 
->>> conn.delete(id='testdoc.1')
->>> conn.delete(q='name:"document 2"')
+>>> conn.delete(id='testdoc.2')
+>>> results = conn.search(u'Владимир')
+>>> len(results)
+0
 
->>> results = conn.search('Verlaine')
+>>> conn.delete(q='text:"bigtable"')
+>>> results = conn.search('bigtable')
 >>> len(results)
 0
 
 
 Docs can also have multiple values for any particular key. This lets us use
-Solr's multiValue fields.
+Solr's multiValue fields to implement FilterQueries.
 
 >>> docs = [
-...     {'id': 'testdoc.5', 'cat': ['poetry', 'science'], 'name': 'document 5', 'text': u''},
-...     {'id': 'testdoc.6', 'cat': ['science-fiction',], 'name': 'document 6', 'text': u''},
+...     {'id': 'testdoc.5', 'keywords': ['poetry', 'science'], 'text': u''},
+...     {'id': 'testdoc.6', 'keywords': ['science-fiction'], 'text': u''},
 ... ]
 
 >>> conn.add(docs)
->>> results = conn.search('cat:"poetry"')
->>> for result in results:
-...     print result['name']
-document 5
+>>> results = conn.search('', fq='keywords:poetry')
+>>> len(results)
+1
 
->>> results = conn.search('cat:"science-fiction"')
->>> for result in results:
-...     print result['name']
-document 6
-
->>> results = conn.search('cat:"science"')
->>> for result in results:
-...     print result['name']
-document 5
+>>> results = conn.search('', fq='keywords:science')
+>>> len(results)
+2
 
 Docs can also boost any particular key. This lets us use Solr's boost on a field.
 
 >>> docs = [
-...     {'id': 'testdoc.7', 'order_i': '7', 'name': 'document 7', 'text': u'eight', 'author': 'seven'},
-...     {'id': 'testdoc.8', 'order_i': '8', 'name': 'document 8', 'text': u'seven', 'author': 'eight'},
+...     {'id': 'testdoc.7',  'text': u'eight', 'author': 'seven'},
+...     {'id': 'testdoc.8',  'text': u'seven', 'author': 'eight'},
 ... ]
 
 >>> conn.add(docs, boost={'author': '2.0',})
->>> results = conn.search('seven author:seven')
+>>> results = conn.search('seven')
 >>> for result in results:
-...     print result['name']
-document 7
-document 8
+...     print result['id']
+testdoc.7
+testdoc.8
 
->>> results = conn.search('eight author:eight')
->>> for result in results:
-...     print result['name']
-document 8
-document 7
 
+We can also add binary documents, like pdf, to the index by passing the file
+handle and content_type to the conection's add_file method.
+>>> import urllib2
+
+>>> conn.add_file({'id': 'testdoc.9'}, 'bigtable-osdi06.pdf', \
+    urllib2.urlopen('http://labs.google.com/papers/bigtable-osdi06.pdf').read(), \
+    content_type='application/pdf')
+>>> results = conn.search('bigtable')
+>>> len(results)
+1
 """
 
 # TODO: unicode support is pretty sloppy. define it better.
@@ -138,6 +130,8 @@ import time
 import urllib
 import urllib2
 from urlparse import urlsplit, urlunsplit
+
+from multipart import MultiPartForm
 
 try:
     # for python 2.5
@@ -598,7 +592,7 @@ class Solr(object):
         self.log.debug("Found '%d' Term suggestions results.", sum(len(j) for i, j in res.items()))
         return res
 
-    def add_file(self, fields, file_handle, filename='',
+    def add_file(self, fields, filename, content,
             content_type='application/octet-stream', commit=True):
         """ Post the content from `file_handle` to Solr Cell's
         ExtractingRequestHandler. The keys in the params will be encoded into
@@ -614,7 +608,7 @@ class Solr(object):
             form.add_field('literal.%s' % key, fields[key])
         if commit:
             form.add_field('commit', 'true')
-        form.add_file('file', filename, file_handle, content_type)
+        form.add_file('file', filename, content, content_type)
 
         request = urllib2.Request(self.url + 'update/extract')
         body = str(form)
@@ -633,8 +627,6 @@ class Solr(object):
             error_message = "Failed to connect to server at '%s'. Are you sure '%s' is correct? Checking it in a browser might help..." % (url, self.base_url)
             self.log.error(error_message)
             raise SolrError(error_message)
-
-        return response
 
 
     def add(self, docs, commit=True, boost=None):
