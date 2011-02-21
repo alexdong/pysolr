@@ -31,6 +31,22 @@ class MultiPartForm(object):
             mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
         self.files.append((fieldname, filename, mimetype, content))
 
+    def _safe_str(self, value):
+        """
+        Convert the value into str. If the value is an iterable container,
+        convert each element first.
+        """
+        if type(value) != str:
+            if type(value) == unicode:
+                value = value.encode('utf-8')
+            elif type(value) in (int, float, long):
+                value = str(value)
+            elif type(value) in (list, tuple):
+                unicode_value = [self._safe_str(elem) for elem in value]
+                value = ' '.join(unicode_value)
+        return value
+
+
     def __str__(self):
         """Return a string representing the form data, including attached files."""
         # Build a list of lists, each containing "lines" of the
@@ -40,27 +56,26 @@ class MultiPartForm(object):
         parts = []
         part_boundary = '--' + self.boundary
 
-        # Add the form fields
-        parts.extend(
-            [ part_boundary,
-              'Content-Disposition: form-data; name="%s"' % name,
-              '',
-              value,
-            ]
-            for name, value in self.form_fields
-            )
+        # Add the form fields. Make sure the value fields have been
+        # converted to str properly. This includes convert list/tuple
+        # and numbers. Unicode will be utf-8 encoded str.
+        parts.extend([
+            part_boundary,
+            'Content-Disposition: form-data; name="%s"' % \
+                self._safe_str(name),
+            '',
+            self._safe_str(value),
+            ] for name, value in self.form_fields)
 
         # Add the files to upload
-        parts.extend(
-            [ part_boundary,
-              'Content-Disposition: form-data; name="%s"; filename="%s"' % \
-                 (field_name, filename),
-              'Content-Type: %s' % content_type,
-              '',
-              body,
-            ]
-            for field_name, filename, content_type, body in self.files
-            )
+        parts.extend([
+            part_boundary,
+            'Content-Disposition: form-data; name="%s"; filename="%s"' % \
+                    (self._safe_str(field_name), self._safe_str(filename)),
+            'Content-Type: %s' % (self._safe_str(content_type)),
+            '',
+            body,
+            ] for field_name, filename, content_type, body in self.files)
 
         # Flatten the list and add closing boundary marker,
         # then return CR+LF separated data
